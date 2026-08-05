@@ -219,9 +219,12 @@ window.MW = window.MW || {};
 		openPickerId = null;
 	}
 
+	// only one popover at a time: both toggles stopPropagation, so the
+	// outside-click handler never sees them and cannot dismiss the other
 	function togglePicker(id) {
 		var wasOpen = openPickerId === id;
 		closePicker();
+		closeSettings();
 		if (wasOpen) return;
 		var card = cards[id];
 		if (!card) return;
@@ -473,6 +476,7 @@ window.MW = window.MW || {};
 
 	function openSettings() {
 		closeSettings();
+		closePicker();
 		var pop = document.createElement("div");
 		pop.className = "settings-pop";
 		pop.setAttribute("role", "dialog");
