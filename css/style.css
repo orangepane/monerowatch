@@ -37,6 +37,8 @@
 	--accent: #ff6600;
 	--accent-soft: #ffa25e; /* AA contrast for small text on dark panels */
 	--accent-rail: #ff6600;
+	--edge: #8a4a18; /* brand hue, low chroma — a full-strength outline on every
+	                    card would compete with the values it frames */
 	--warn: #ffb454;
 
 	--top-bar-height: 32px;
@@ -309,8 +311,9 @@ button {
 	display: grid;
 	grid-template-rows: auto 1fr auto;
 	background: var(--panel);
-	border: 1px solid var(--line);
+	border: 1px solid var(--edge);
 	border-left: 2px solid var(--accent-rail);
+	border-radius: 4px;
 	container-type: size;
 	min-height: 9rem;
 	padding: 0.9rem 1.1rem;
@@ -440,6 +443,7 @@ button {
 	z-index: 90;
 	border: none;
 	border-left: 3px solid var(--accent-rail);
+	border-radius: 0; /* maximized: stay flush to the viewport */
 	background: var(--panel);
 	padding: max(2rem, env(safe-area-inset-top, 0px)) max(3rem, env(safe-area-inset-right, 0px))
 		max(2rem, var(--safe-bottom)) max(3rem, env(safe-area-inset-left, 0px));
