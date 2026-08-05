@@ -2,7 +2,7 @@
    cross-origin (monerod node, price APIs) always goes to the network. */
 "use strict";
 
-var VERSION = "monerowatch-v1";
+var VERSION = "monerowatch-v2";
 
 var ASSETS = [
 	"./",
@@ -84,12 +84,14 @@ self.addEventListener("fetch", function (e) {
 		return;
 	}
 
-	// static assets: cache first
+	/* static assets: stale-while-revalidate. Cache-first alone would pin the very
+	   first js/css a visitor ever downloaded, since index.html is network-first
+	   but its asset URLs never change. Serve the cached copy now, refresh for
+	   the next load. */
 	e.respondWith(
 		caches.match(e.request).then(function (hit) {
-			return (
-				hit ||
-				fetch(e.request).then(function (res) {
+			var fresh = fetch(e.request)
+				.then(function (res) {
 					if (res.ok) {
 						var copy = res.clone();
 						caches.open(VERSION).then(function (cache) {
@@ -98,7 +100,12 @@ self.addEventListener("fetch", function (e) {
 					}
 					return res;
 				})
-			);
+				.catch(function () {
+					return hit; // offline: cached copy or a genuine network error
+				});
+			if (!hit) return fresh;
+			e.waitUntil(fresh);
+			return hit;
 		})
 	);
 });

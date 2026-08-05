@@ -5,8 +5,10 @@
 	<meta name="viewport" content="width=device-width, viewport-fit=cover" />
 	<meta name="description" content="MoneroWatch: live Monero block height, price, hashrate, and block reward in your browser. No trackers, no third-party scripts." />
 	<meta name="theme-color" content="#ff6600" />
-	<!-- Privacy: no third-party scripts. Custom node URLs require an open connect-src for https. -->
-	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' https:; base-uri 'none'; form-action 'none'" />
+	<!-- Privacy: no third-party scripts. connect-src stays open because the node URL
+	     is the user's to choose; http: is allowed so a LAN monerod works when this
+	     page is served over http (browsers still block http nodes on an https page). -->
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' https: http:; base-uri 'none'; form-action 'none'" />
 	<link rel="icon" href="./img/icon-16.png" sizes="16x16" type="image/png" />
 	<link rel="icon" href="./img/icon-32.png" sizes="32x32" type="image/png" />
 	<link rel="icon" href="./img/icon-48.png" sizes="48x48" type="image/png" />

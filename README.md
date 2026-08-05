@@ -4,7 +4,7 @@ A live Monero network display that runs entirely in the browser. No backend, no 
 
 ## What it shows
 
-- Block height, estimated network hashrate, and block reward (tail emission)
+- Block height, estimated network hashrate, block reward (tail emission), and tx pool size
 - XMR price in USD, piconero per dollar, and the XMR/BTC ratio
 
 ## Features
@@ -25,9 +25,24 @@ Open http://localhost:8000. Opening `index.html` directly also works, but PWA in
 
 ## Data sources
 
-- Chain: monerod JSON-RPC. Default node is `xmr-node.cakewallet.com:18081`; change it in settings.
-- Price: Kraken public API, with CoinGecko and Bitfinex as fallbacks.
+- Chain: monerod JSON-RPC (`get_info`, `get_last_block_header`). Default node is `xmr-node.cakewallet.com:18081`; change it in settings.
+- Price: Kraken public API, with CoinGecko and Bitfinex as fallbacks. Every request is time-boxed to 8 seconds.
 
-Monero has no public mempool, so there is no mempool widget. That is by design.
+## Pointing at your own node
+
+monerod rejects browser requests unless you allow this page's origin:
+
+```sh
+monerod --rpc-bind-ip 0.0.0.0 --confirm-external-bind \
+        --rpc-access-control-origins 'http://localhost:8000'
+```
+
+Then set the node URL in settings, e.g. `http://192.168.1.10:18081`.
+
+Two browser rules to know: a plain-`http` node only works when this page is itself served over `http` (mixed-content blocking), and the origin in `--rpc-access-control-origins` must match exactly — scheme, host, and port.
+
+## A note on the tx pool
+
+Monero's transaction pool is public — that is what the tx pool widget reads. What Monero hides is amounts, senders, and receivers, not the existence of pending transactions.
 
 The Monero symbol is from the getmonero.org press kit. Fonts are Red Hat Mono (SIL OFL 1.1).

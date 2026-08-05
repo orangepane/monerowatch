@@ -8,18 +8,32 @@ window.MW = window.MW || {};
 	var LS_VALUES = "monerowatch.values.v1";
 	var DEFAULT_NODE = "https://xmr-node.cakewallet.com:18081";
 
-	var DEFAULT_CONFIG = {
-		items: [
-			{ modes: ["blockHeight"] },
-			{ modes: ["price"] },
-			{ modes: ["piconeroPerDollar"] },
-			{ modes: ["hashrate"] },
-			{ modes: ["blockReward"] },
-		],
-	};
+	var DEFAULT_MODES = ["blockHeight", "price", "piconeroPerDollar", "hashrate", "blockReward"];
 
-	function clone(o) {
-		return JSON.parse(JSON.stringify(o));
+	function newId() {
+		return "d" + Math.random().toString(36).slice(2, 9);
+	}
+
+	function defaultConfig() {
+		return {
+			items: DEFAULT_MODES.map(function (m) {
+				return { id: newId(), modes: [m] };
+			}),
+		};
+	}
+
+	/* displays are identified by a stable id, not by array position — removing one
+	   must not shift rotation or fullscreen state onto a different display */
+	function normalize(config) {
+		config.items = config.items
+			.filter(function (it) {
+				return it && Array.isArray(it.modes);
+			})
+			.map(function (it) {
+				if (!it.id) it.id = newId();
+				return it;
+			});
+		return config;
 	}
 
 	function loadConfig() {
@@ -27,12 +41,12 @@ window.MW = window.MW || {};
 			var raw = localStorage.getItem(LS_CONFIG);
 			if (raw) {
 				var c = JSON.parse(raw);
-				if (c && Array.isArray(c.items)) return c;
+				if (c && Array.isArray(c.items)) return normalize(c);
 			}
 		} catch (e) {
 			/* private mode / corrupt data — fall through */
 		}
-		return clone(DEFAULT_CONFIG);
+		return defaultConfig();
 	}
 
 	function loadNode() {
@@ -51,14 +65,14 @@ window.MW = window.MW || {};
 				if (v && typeof v === "object") return v;
 			}
 		} catch (e) {}
-		return { values: {}, updatedAt: {} };
+		return {};
 	}
 
 	var saved = loadValues();
 
 	var state = {
-		values: saved.values, // widgetId -> last value (persisted: offline shows last-known)
-		updatedAt: saved.updatedAt, // widgetId -> timestamp of last success
+		values: saved.values || {}, // widgetId -> last value (persisted: offline shows last-known)
+		updatedAt: saved.updatedAt || {}, // widgetId -> timestamp of last success
 		status: {
 			chain: { ok: null },
 			price: { ok: null, source: null },
@@ -78,6 +92,7 @@ window.MW = window.MW || {};
 
 	MW.store = {
 		DEFAULT_NODE: DEFAULT_NODE,
+		newId: newId,
 
 		get: function (key) {
 			return state[key];
@@ -92,9 +107,13 @@ window.MW = window.MW || {};
 			};
 		},
 
-		setValue: function (id, value) {
-			state.values[id] = value;
-			state.updatedAt[id] = Date.now();
+		/* batched: one write and one render per poll, not one per field */
+		setValues: function (map) {
+			var now = Date.now();
+			Object.keys(map).forEach(function (id) {
+				state.values[id] = map[id];
+				state.updatedAt[id] = now;
+			});
 			try {
 				localStorage.setItem(
 					LS_VALUES,
@@ -114,15 +133,15 @@ window.MW = window.MW || {};
 		},
 
 		setConfig: function (config) {
-			state.config = config;
+			state.config = normalize(config);
 			try {
-				localStorage.setItem(LS_CONFIG, JSON.stringify(config));
+				localStorage.setItem(LS_CONFIG, JSON.stringify(state.config));
 			} catch (e) {}
 			notify("config");
 		},
 
 		resetConfig: function () {
-			this.setConfig(clone(DEFAULT_CONFIG));
+			this.setConfig(defaultConfig());
 		},
 
 		setNodeUrl: function (url) {

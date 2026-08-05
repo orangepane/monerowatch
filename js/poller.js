@@ -6,6 +6,7 @@ window.MW = window.MW || {};
 
 	var CHAIN_MS = 10000;
 	var PRICE_MS = 30000;
+	var TIMEOUT_MS = 8000; // a hung node must fail before the next tick fires
 
 	var PRICE_SOURCES = [
 		{
@@ -57,27 +58,40 @@ window.MW = window.MW || {};
 		},
 	];
 
-	var activeSource = 0; // sticky: keep using the last source that worked
-	var activeRatioSource = 0;
+	var sticky = { price: 0, ratio: 0 }; // keep using the last source that worked
 	var chainTimer = null;
 	var priceTimer = null;
 	var running = false;
 
-	function rpc(method) {
-		var node = MW.store.get("nodeUrl").replace(/\/+$/, "");
-		return fetch(node + "/json_rpc", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ jsonrpc: "2.0", id: "0", method: method }),
-		})
+	/* every request is time-boxed: without this a hung socket never settles and
+	   the next interval stacks another request on top of it, forever */
+	function fetchJSON(url, opts) {
+		var ctl = new AbortController();
+		var timer = setTimeout(function () {
+			ctl.abort();
+		}, TIMEOUT_MS);
+		opts = opts || {};
+		opts.signal = ctl.signal;
+		return fetch(url, opts)
 			.then(function (res) {
 				if (!res.ok) throw new Error("HTTP " + res.status);
 				return res.json();
 			})
-			.then(function (j) {
-				if (j.error) throw new Error(j.error.message || "rpc error");
-				return j.result;
+			.finally(function () {
+				clearTimeout(timer);
 			});
+	}
+
+	function rpc(method) {
+		var node = MW.store.get("nodeUrl").replace(/\/+$/, "");
+		return fetchJSON(node + "/json_rpc", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ jsonrpc: "2.0", id: "0", method: method }),
+		}).then(function (j) {
+			if (j.error) throw new Error(j.error.message || "rpc error");
+			return j.result;
+		});
 	}
 
 	function pollChain() {
@@ -85,11 +99,13 @@ window.MW = window.MW || {};
 			.then(function (r) {
 				var info = r[0];
 				var header = r[1].block_header;
-				MW.store.setValue("blockHeight", info.height);
-				// "estimated" — real network hashrate is unknowable on Monero
-				MW.store.setValue("hashrate", info.difficulty / 120);
-				MW.store.setValue("blockReward", header.reward / 1e12); // piconero -> XMR
-				MW.store.setValue("txPoolSize", info.tx_pool_size); // pool count; not displayed yet
+				MW.store.setValues({
+					blockHeight: info.height,
+					// "estimated" — real network hashrate is unknowable on Monero
+					hashrate: info.difficulty / 120,
+					blockReward: header.reward / 1e12, // piconero -> XMR
+					txPool: info.tx_pool_size,
+				});
 				MW.store.setStatus("chain", { ok: true });
 			})
 			.catch(function () {
@@ -97,67 +113,45 @@ window.MW = window.MW || {};
 			});
 	}
 
-	function trySource(i) {
-		var s = PRICE_SOURCES[i];
-		return fetch(s.url)
-			.then(function (res) {
-				if (!res.ok) throw new Error("HTTP " + res.status);
-				return res.json();
-			})
-			.then(function (j) {
-				var p = s.parse(j);
-				if (!p || isNaN(p)) throw new Error("unparseable price");
-				return p;
-			});
+	/* walk the sources starting from the last one that worked; onValue gets the
+	   first parseable answer, onFail runs only when every source is exhausted */
+	function pollFeed(key, sources, onValue, onFail) {
+		(function attempt(step) {
+			if (step >= sources.length) {
+				if (onFail) onFail();
+				return;
+			}
+			var i = (sticky[key] + step) % sources.length;
+			var s = sources[i];
+			fetchJSON(s.url)
+				.then(function (j) {
+					var v = s.parse(j);
+					if (!v || isNaN(v)) throw new Error("unparseable " + key);
+					sticky[key] = i;
+					onValue(v, s.name);
+				})
+				.catch(function () {
+					attempt(step + 1);
+				});
+		})(0);
 	}
 
 	function pollPrice() {
-		// try the sticky source first, then fall through the rest
-		var order = PRICE_SOURCES.map(function (_, i) {
-			return (activeSource + i) % PRICE_SOURCES.length;
-		});
-		(function attempt(idx) {
-			if (idx >= order.length) {
+		pollFeed(
+			"price",
+			PRICE_SOURCES,
+			function (p, name) {
+				MW.store.setValues({ price: p, piconeroPerDollar: 1e12 / p });
+				MW.store.setStatus("price", { ok: true, source: name });
+			},
+			function () {
 				MW.store.setStatus("price", { ok: false });
-				return;
 			}
-			var i = order[idx];
-			trySource(i)
-				.then(function (p) {
-					activeSource = i;
-					MW.store.setValue("price", p);
-					MW.store.setValue("piconeroPerDollar", 1e12 / p);
-					MW.store.setStatus("price", { ok: true, source: PRICE_SOURCES[i].name });
-				})
-				.catch(function () {
-					attempt(idx + 1);
-				});
-		})(0);
-	}
-
-	function pollRatio() {
-		var order = RATIO_SOURCES.map(function (_, i) {
-			return (activeRatioSource + i) % RATIO_SOURCES.length;
+		);
+		// the ratio has no status line of its own — failure just leaves it stale
+		pollFeed("ratio", RATIO_SOURCES, function (r) {
+			MW.store.setValues({ xmrBtc: r });
 		});
-		(function attempt(idx) {
-			if (idx >= order.length) return; // ratio has no status line of its own
-			var i = order[idx];
-			var s = RATIO_SOURCES[i];
-			fetch(s.url)
-				.then(function (res) {
-					if (!res.ok) throw new Error("HTTP " + res.status);
-					return res.json();
-				})
-				.then(function (j) {
-					var r = s.parse(j);
-					if (!r || isNaN(r)) throw new Error("unparseable ratio");
-					activeRatioSource = i;
-					MW.store.setValue("xmrBtc", r);
-				})
-				.catch(function () {
-					attempt(idx + 1);
-				});
-		})(0);
 	}
 
 	MW.poller = {
@@ -169,12 +163,8 @@ window.MW = window.MW || {};
 			running = true;
 			pollChain();
 			pollPrice();
-			pollRatio();
 			chainTimer = setInterval(pollChain, CHAIN_MS);
-			priceTimer = setInterval(function () {
-				pollPrice();
-				pollRatio();
-			}, PRICE_MS);
+			priceTimer = setInterval(pollPrice, PRICE_MS);
 		},
 
 		stop: function () {

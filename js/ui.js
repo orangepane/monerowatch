@@ -9,7 +9,7 @@ window.MW = window.MW || {};
 		"tail emission · 0.6 XMR per block, forever",
 		"1 XMR = 1,000,000,000,000 piconero",
 		"every block is a difficulty adjustment",
-		"no public mempool · by design",
+		"the pool is public · the amounts are not",
 		"randomx · mined by cpus, not warehouses",
 		"zero third-party scripts on this page",
 		"your node · your rules",
@@ -18,15 +18,17 @@ window.MW = window.MW || {};
 
 	var PULSE_MS = 30000; // multi-mode rotation cadence: settle, change, settle
 	var MARQUEE_MS = 8000;
+	var STALE_MS = 5000; // staleness must tick on its own — dead feeds send nothing
 
 	var grid = document.getElementById("grid");
 	var footStatus = document.getElementById("foot-status");
 	var marquee = document.getElementById("marquee");
 	var netDot = document.getElementById("net-dot");
 
-	var rotIdx = {}; // display index -> rotation offset for multi-mode cards
-	var openPicker = -1; // display index with open mode picker (-1 = none)
-	var fullscreenIdx = -1;
+	var cards = {}; // display id -> card element (kept across re-renders)
+	var rotIdx = {}; // display id -> rotation offset for multi-mode cards
+	var openPickerId = null;
+	var fullscreenId = null;
 	var lastHeight = null;
 
 	/* ---------- svg icon helpers ---------- */
@@ -48,7 +50,7 @@ window.MW = window.MW || {};
 		return svg;
 	}
 
-	var ICON_COG = ["M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5m0-4.5l5.25 5.25"];
+	var ICON_EXPAND = ["M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5m0-4.5l5.25 5.25"];
 	var ICON_SHRINK = ["M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0L15 9m5.25 11.25h-4.5m4.5 0L15 15"];
 	var ICON_X = ["M6 18L18 6M6 6l12 12"];
 	var ICON_MODES = [
@@ -74,69 +76,89 @@ window.MW = window.MW || {};
 
 	/* ---------- display cards ---------- */
 
-	function activeMode(item, idx) {
+	function activeMode(item) {
 		if (!item.modes.length) return null;
-		var r = (rotIdx[idx] || 0) % item.modes.length;
-		return item.modes[r];
+		return item.modes[(rotIdx[item.id] || 0) % item.modes.length];
+	}
+
+	function eachItem(fn) {
+		MW.store.get("config").items.forEach(function (item) {
+			var card = cards[item.id];
+			if (card) fn(card, item);
+		});
+	}
+
+	function renderCard(card, item) {
+		var values = MW.store.get("values");
+		var mode = activeMode(item);
+		var valueEl = card.querySelector(".card-value");
+		var descEl = card.querySelector(".card-desc");
+
+		if (!mode) {
+			card.querySelector(".card-label-text").textContent = "";
+			descEl.textContent = "";
+			valueEl.classList.add("is-hint");
+			valueEl.textContent = "click the modes icon to configure";
+			return;
+		}
+
+		var w = MW.widgets[mode];
+		card.querySelector(".card-label-text").textContent = w.name;
+		descEl.textContent = w.desc;
+		valueEl.classList.remove("is-hint");
+
+		var v = values[mode];
+		if (v === undefined) {
+			if (!valueEl.querySelector(".ring")) {
+				valueEl.textContent = "";
+				valueEl.appendChild(makeRing());
+			}
+			return;
+		}
+
+		var text = w.format(v);
+		if (valueEl.textContent === text) return;
+		valueEl.textContent = text;
+		// auto-fit: monospace advance ~0.6em, CSS scales font by char count
+		valueEl.style.setProperty("--chars", String(text.length));
+		if (mode === "blockHeight" && lastHeight !== null && v !== lastHeight) {
+			valueEl.classList.remove("flash");
+			void valueEl.offsetWidth; // restart animation
+			valueEl.classList.add("flash");
+		}
 	}
 
 	function renderValues() {
-		var values = MW.store.get("values");
-		var config = MW.store.get("config");
-		Array.prototype.forEach.call(grid.children, function (card, idx) {
-			if (!card.classList.contains("card")) return;
-			var item = config.items[idx];
-			if (!item) return;
-			var mode = activeMode(item, idx);
-			var label = card.querySelector(".card-label-text");
-			var valueEl = card.querySelector(".card-value");
-			var descEl = card.querySelector(".card-desc");
-			if (!mode) return; // hint state
-			var w = MW.widgets[mode];
-			var v = values[mode];
-			label.textContent = w.name;
-			descEl.textContent = w.desc;
-			if (v === undefined) {
-				if (!valueEl.querySelector(".ring")) {
-					valueEl.textContent = "";
-					valueEl.appendChild(makeRing());
-				}
-				return;
-			}
-			var ring = valueEl.querySelector(".ring");
-			if (ring) ring.remove();
-			var text = w.format(v);
-			if (valueEl.textContent !== text) {
-				valueEl.textContent = text;
-				// auto-fit: monospace advance ~0.6em, CSS scales font by char count
-				valueEl.style.setProperty("--chars", String(text.length));
-				if (mode === "blockHeight" && lastHeight !== null && v !== lastHeight) {
-					valueEl.classList.remove("flash");
-					void valueEl.offsetWidth; // restart animation
-					valueEl.classList.add("flash");
-				}
-			}
-		});
-		lastHeight = values.blockHeight !== undefined ? values.blockHeight : lastHeight;
+		eachItem(renderCard);
+		var h = MW.store.get("values").blockHeight;
+		if (h !== undefined) lastHeight = h;
 	}
+
+	// chain widgets stale after 2x10s; price widgets after 2x30s
+	var STALE_BUDGET = {
+		blockHeight: 20000,
+		hashrate: 20000,
+		blockReward: 20000,
+		txPool: 20000,
+		price: 60000,
+		piconeroPerDollar: 60000,
+		xmrBtc: 60000,
+	};
 
 	function renderStaleness() {
-		var updatedAt = MW.store.get("updatedAt") || {};
+		var updatedAt = MW.store.get("updatedAt");
 		var now = Date.now();
-		// chain widgets stale after 2x10s; price widgets after 2x30s
-		var budgets = { blockHeight: 20000, hashrate: 20000, blockReward: 20000, price: 60000, piconeroPerDollar: 60000, xmrBtc: 60000 };
-		var config = MW.store.get("config");
-		Array.prototype.forEach.call(grid.children, function (card, idx) {
-			if (!card.classList.contains("card")) return;
-			var item = config.items[idx];
-			var mode = item && activeMode(item, idx);
+		eachItem(function (card, item) {
+			var mode = activeMode(item);
 			if (!mode) return;
 			var at = updatedAt[mode] || 0;
-			card.classList.toggle("stale", at > 0 && now - at > budgets[mode]);
+			card.classList.toggle("stale", at > 0 && now - at > STALE_BUDGET[mode]);
 		});
 	}
 
-	function buildModePicker(idx) {
+	/* ---------- mode picker ---------- */
+
+	function buildModePicker(id) {
 		var pop = document.createElement("div");
 		pop.className = "mode-pop";
 		pop.setAttribute("role", "menu");
@@ -144,32 +166,31 @@ window.MW = window.MW || {};
 		h.textContent = "modes for this display";
 		pop.appendChild(h);
 
-		var config = MW.store.get("config");
-		var item = config.items[idx];
+		var item = findItem(id);
 
-		MW.widgetIds.forEach(function (id) {
+		MW.widgetIds.forEach(function (mode) {
 			var row = document.createElement("div");
 			row.className = "mode-row";
 			var cb = document.createElement("input");
 			cb.type = "checkbox";
-			cb.id = "mode-" + idx + "-" + id;
-			cb.checked = item.modes.indexOf(id) !== -1;
+			cb.id = "mode-" + id + "-" + mode;
+			cb.checked = item.modes.indexOf(mode) !== -1;
 			var label = document.createElement("label");
 			label.setAttribute("for", cb.id);
-			var w = MW.widgets[id];
-			label.innerHTML = "";
+			var w = MW.widgets[mode];
 			label.appendChild(document.createTextNode(w.name));
 			var d = document.createElement("span");
 			d.className = "mode-desc";
 			d.textContent = w.desc;
 			label.appendChild(d);
+			// the card element survives a config change, so this popover stays open
 			cb.addEventListener("change", function () {
 				var c = MW.store.get("config");
-				var modes = c.items[idx].modes;
-				var at = modes.indexOf(id);
-				if (at === -1) modes.push(id);
+				var modes = findItem(id, c).modes;
+				var at = modes.indexOf(mode);
+				if (at === -1) modes.push(mode);
 				else modes.splice(at, 1);
-				rotIdx[idx] = 0;
+				rotIdx[id] = 0;
 				MW.store.setConfig(c);
 			});
 			row.appendChild(cb);
@@ -179,33 +200,74 @@ window.MW = window.MW || {};
 		return pop;
 	}
 
-	function togglePicker(card, idx) {
-		var existing = card.querySelector(".mode-pop");
-		if (existing) {
-			existing.remove();
-			card.classList.remove("picker-open");
-			openPicker = -1;
-			return;
+	function findItem(id, config) {
+		var items = (config || MW.store.get("config")).items;
+		for (var i = 0; i < items.length; i++) {
+			if (items[i].id === id) return items[i];
 		}
-		closeAllPickers();
-		card.appendChild(buildModePicker(idx));
+		return null;
+	}
+
+	function closePicker() {
+		if (openPickerId === null) return;
+		var card = cards[openPickerId];
+		if (card) {
+			var pop = card.querySelector(".mode-pop");
+			if (pop) pop.remove();
+			card.classList.remove("picker-open");
+		}
+		openPickerId = null;
+	}
+
+	function togglePicker(id) {
+		var wasOpen = openPickerId === id;
+		closePicker();
+		if (wasOpen) return;
+		var card = cards[id];
+		if (!card) return;
+		card.appendChild(buildModePicker(id));
 		card.classList.add("picker-open");
-		openPicker = idx;
+		openPickerId = id;
 	}
 
-	function closeAllPickers() {
-		Array.prototype.forEach.call(grid.querySelectorAll(".mode-pop"), function (p) {
-			p.remove();
-		});
-		Array.prototype.forEach.call(grid.querySelectorAll(".card.picker-open"), function (c) {
-			c.classList.remove("picker-open");
-		});
-		openPicker = -1;
+	/* ---------- fullscreen ---------- */
+
+	function setFullscreenIcon(card, on) {
+		var btn = card.querySelector(".btn-fs");
+		btn.innerHTML = "";
+		btn.appendChild(icon(on ? ICON_SHRINK : ICON_EXPAND));
+		btn.setAttribute("aria-label", on ? "Exit fullscreen" : "Maximize display");
 	}
 
-	function makeCard(item, idx) {
+	function exitFullscreen() {
+		if (fullscreenId === null) return;
+		var card = cards[fullscreenId];
+		if (card) {
+			card.classList.remove("fullscreen");
+			setFullscreenIcon(card, false);
+		}
+		fullscreenId = null;
+	}
+
+	function toggleFullscreen(id) {
+		var wasOpen = fullscreenId === id;
+		exitFullscreen();
+		if (wasOpen) return;
+		var card = cards[id];
+		if (!card) return;
+		fullscreenId = id;
+		card.classList.add("fullscreen");
+		setFullscreenIcon(card, true);
+		card.focus();
+	}
+
+	/* ---------- card construction ---------- */
+
+	function makeCard(item) {
+		var id = item.id;
 		var card = document.createElement("section");
 		card.className = "card";
+		card.dataset.id = id;
 		card.setAttribute("tabindex", "-1");
 
 		var head = document.createElement("div");
@@ -231,16 +293,16 @@ window.MW = window.MW || {};
 		btnModes.appendChild(icon(ICON_MODES));
 		btnModes.addEventListener("click", function (e) {
 			e.stopPropagation();
-			togglePicker(card, idx);
+			togglePicker(id);
 		});
 
-		var btnMax = document.createElement("button");
-		btnMax.type = "button";
-		btnMax.className = "icon-btn";
-		btnMax.setAttribute("aria-label", "Maximize display");
-		btnMax.appendChild(icon(ICON_COG));
-		btnMax.addEventListener("click", function () {
-			enterFullscreen(idx);
+		var btnFs = document.createElement("button");
+		btnFs.type = "button";
+		btnFs.className = "icon-btn btn-fs";
+		btnFs.setAttribute("aria-label", "Maximize display");
+		btnFs.appendChild(icon(ICON_EXPAND));
+		btnFs.addEventListener("click", function () {
+			toggleFullscreen(id);
 		});
 
 		var btnRemove = document.createElement("button");
@@ -249,13 +311,17 @@ window.MW = window.MW || {};
 		btnRemove.setAttribute("aria-label", "Remove this display");
 		btnRemove.appendChild(icon(ICON_X));
 		btnRemove.addEventListener("click", function () {
+			if (fullscreenId === id) exitFullscreen();
+			if (openPickerId === id) closePicker();
 			var c = MW.store.get("config");
-			c.items.splice(idx, 1);
+			c.items = c.items.filter(function (it) {
+				return it.id !== id;
+			});
 			MW.store.setConfig(c);
 		});
 
 		controls.appendChild(btnModes);
-		controls.appendChild(btnMax);
+		controls.appendChild(btnFs);
 		controls.appendChild(btnRemove);
 
 		head.appendChild(label);
@@ -270,21 +336,17 @@ window.MW = window.MW || {};
 		card.appendChild(head);
 		card.appendChild(valueEl);
 		card.appendChild(desc);
-
-		if (!item.modes.length) {
-			var hint = document.createElement("div");
-			hint.className = "card-hint";
-			hint.textContent = "click the modes icon to configure";
-			card.insertBefore(hint, desc);
-		}
 		return card;
 	}
 
+	/* Reconciles rather than rebuilding: a card element that is still in the
+	   config keeps its DOM, so an open mode picker survives a config change. */
 	function renderGrid() {
-		closeAllPickers();
-		grid.innerHTML = "";
 		var config = MW.store.get("config");
+
 		if (!config.items.length) {
+			cards = {};
+			grid.innerHTML = "";
 			var empty = document.createElement("div");
 			empty.className = "empty-state";
 			var btn = document.createElement("button");
@@ -295,80 +357,85 @@ window.MW = window.MW || {};
 			grid.appendChild(empty);
 			return;
 		}
-		config.items.forEach(function (item, idx) {
-			grid.appendChild(makeCard(item, idx));
+
+		var live = {};
+		config.items.forEach(function (item, i) {
+			var card = cards[item.id] || (cards[item.id] = makeCard(item));
+			live[item.id] = true;
+			if (grid.children[i] !== card) grid.insertBefore(card, grid.children[i] || null);
 		});
+
+		Object.keys(cards).forEach(function (id) {
+			if (live[id]) return;
+			cards[id].remove();
+			delete cards[id];
+			delete rotIdx[id];
+		});
+		Array.prototype.slice.call(grid.children).forEach(function (el) {
+			if (!el.classList.contains("card")) el.remove(); // stale empty state
+		});
+
 		renderValues();
 		renderStaleness();
 	}
 
-	function addDisplay() {
+	function addDisplay(e) {
+		if (e) e.stopPropagation(); // the outside-click handler would close the picker we open
 		var c = MW.store.get("config");
-		c.items.push({ modes: [] });
+		var item = { id: MW.store.newId(), modes: [] };
+		c.items.push(item);
 		MW.store.setConfig(c);
-		// auto-open the picker on the new card
-		var cards = grid.querySelectorAll(".card");
-		if (cards.length) togglePicker(cards[cards.length - 1], c.items.length - 1);
+		togglePicker(item.id); // configure it right away — an empty card is useless
 	}
 
-	/* ---------- fullscreen ---------- */
-
-	function enterFullscreen(idx) {
-		exitFullscreen();
-		var card = grid.children[idx];
-		if (!card || !card.classList.contains("card")) return;
-		fullscreenIdx = idx;
-		card.classList.add("fullscreen");
-		var btn = card.querySelector('.card-controls .icon-btn[aria-label^="Maximize"]');
-		if (btn) {
-			btn.innerHTML = "";
-			btn.appendChild(icon(ICON_SHRINK));
-			btn.setAttribute("aria-label", "Exit fullscreen");
-		}
-		card.focus();
-	}
-
-	function exitFullscreen() {
-		if (fullscreenIdx === -1) return;
-		var card = grid.children[fullscreenIdx];
-		if (card && card.classList.contains("card")) {
-			card.classList.remove("fullscreen");
-			var btn = card.querySelector('.card-controls .icon-btn[aria-label^="Exit"]');
-			if (btn) {
-				btn.innerHTML = "";
-				btn.appendChild(icon(ICON_COG));
-				btn.setAttribute("aria-label", "Maximize display");
-			}
-		}
-		fullscreenIdx = -1;
-	}
+	/* ---------- global dismiss ---------- */
 
 	document.addEventListener("keydown", function (e) {
-		if (e.key === "Escape") {
-			exitFullscreen();
-			closeAllPickers();
-			closeSettings();
-		}
+		if (e.key !== "Escape") return;
+		exitFullscreen();
+		closePicker();
+		closeSettings();
 	});
 
 	document.addEventListener("click", function (e) {
-		if (openPicker !== -1 && !e.target.closest(".card")) closeAllPickers();
+		if (openPickerId !== null && !e.target.closest(".card")) closePicker();
+		if (settingsPop && !e.target.closest(".settings-pop")) closeSettings();
 	});
 
 	/* ---------- footer status ---------- */
 
+	function statusMark(ok) {
+		var el = document.createElement("span");
+		el.textContent = ok === null ? "…" : ok ? "✓" : "✗";
+		if (ok !== null) el.className = ok ? "ok" : "bad";
+		return el;
+	}
+
+	// spans let CSS drop the hostname / source name on narrow screens.
+	// built as nodes, not innerHTML — the node URL is user-supplied.
 	function renderStatus() {
 		var st = MW.store.get("status");
-		var nodeHost = MW.store.get("nodeUrl").replace(/^https?:\/\//, "");
-		function mark(ok) {
-			return ok === null ? "…" : ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
-		}
-		// spans let CSS drop the hostname / source name on narrow screens
-		footStatus.innerHTML =
-			"chain <span class=\"st-node\">" + nodeHost + "</span> " + mark(st.chain.ok) +
-			" · price <span class=\"st-src\">" + (st.price.source || "—") + "</span> " + mark(st.price.ok);
+		var host = MW.store.get("nodeUrl").replace(/^https?:\/\//, "");
 
-		var c = st.chain.ok, p = st.price.ok;
+		function part(prefix, detail, cls, ok) {
+			var frag = document.createDocumentFragment();
+			frag.appendChild(document.createTextNode(prefix));
+			var d = document.createElement("span");
+			d.className = cls;
+			d.textContent = detail;
+			frag.appendChild(d);
+			frag.appendChild(document.createTextNode(" "));
+			frag.appendChild(statusMark(ok));
+			return frag;
+		}
+
+		footStatus.textContent = "";
+		footStatus.appendChild(part("chain ", host, "st-node", st.chain.ok));
+		footStatus.appendChild(document.createTextNode(" · "));
+		footStatus.appendChild(part("price ", st.price.source || "—", "st-src", st.price.ok));
+
+		var c = st.chain.ok,
+			p = st.price.ok;
 		netDot.className = "net-dot " + (c && p ? "ok" : c === false && p === false ? "down" : "degraded");
 	}
 
@@ -392,6 +459,18 @@ window.MW = window.MW || {};
 		settingsPop = null;
 	}
 
+	// only http(s) reaches monerod, and anything else would be stored verbatim
+	function normalizeNodeUrl(raw) {
+		var url;
+		try {
+			url = new URL(raw);
+		} catch (e) {
+			return null;
+		}
+		if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+		return url.origin + url.pathname.replace(/\/+$/, "");
+	}
+
 	function openSettings() {
 		closeSettings();
 		var pop = document.createElement("div");
@@ -410,7 +489,7 @@ window.MW = window.MW || {};
 
 		var input = document.createElement("input");
 		input.id = "node-url";
-		input.type = "text";
+		input.type = "url";
 		input.spellcheck = false;
 		input.value = MW.store.get("nodeUrl");
 		pop.appendChild(input);
@@ -418,8 +497,12 @@ window.MW = window.MW || {};
 		var hint = document.createElement("div");
 		hint.className = "hint";
 		hint.textContent =
-			"public nodes see your IP. run your own monerod and point here — applies on next poll.";
+			"public nodes see your IP. run your own monerod with --rpc-access-control-origins and point here — applies on next poll.";
 		pop.appendChild(hint);
+
+		var err = document.createElement("div");
+		err.className = "hint err";
+		pop.appendChild(err);
 
 		var row = document.createElement("div");
 		row.className = "row";
@@ -428,10 +511,14 @@ window.MW = window.MW || {};
 		save.type = "button";
 		save.textContent = "save";
 		save.addEventListener("click", function () {
-			var url = input.value.trim();
-			if (url) MW.store.setNodeUrl(url);
+			var url = normalizeNodeUrl(input.value.trim());
+			if (!url) {
+				err.textContent = "needs a full http:// or https:// url, e.g. http://127.0.0.1:18081";
+				input.focus();
+				return;
+			}
+			MW.store.setNodeUrl(url);
 			closeSettings();
-			renderStatus();
 		});
 
 		var reset = document.createElement("button");
@@ -464,11 +551,11 @@ window.MW = window.MW || {};
 	MW.store.subscribe("config", renderGrid);
 	MW.store.subscribe("values", renderValues);
 	MW.store.subscribe("status", renderStatus);
+	MW.store.subscribe("nodeUrl", renderStatus);
 	MW.store.subscribe("pulse", function () {
-		var config = MW.store.get("config");
-		config.items.forEach(function (item, idx) {
+		MW.store.get("config").items.forEach(function (item) {
 			if (item.modes.length > 1) {
-				rotIdx[idx] = ((rotIdx[idx] || 0) + 1) % item.modes.length;
+				rotIdx[item.id] = ((rotIdx[item.id] || 0) + 1) % item.modes.length;
 			}
 		});
 		renderValues();
@@ -488,6 +575,7 @@ window.MW = window.MW || {};
 
 	marquee.textContent = FACTS[0];
 	setInterval(rotateFact, MARQUEE_MS);
+	setInterval(renderStaleness, STALE_MS);
 	setInterval(function () {
 		MW.store.tickPulse();
 	}, PULSE_MS);

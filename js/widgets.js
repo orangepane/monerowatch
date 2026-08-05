@@ -25,7 +25,10 @@ window.MW = window.MW || {};
 			name: "XMR Price",
 			desc: "market price of monero in USD",
 			format: function (v) {
-				return "$" + int(v);
+				return "$" + v.toLocaleString("en-US", {
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2,
+				});
 			},
 		},
 		piconeroPerDollar: {
@@ -49,6 +52,13 @@ window.MW = window.MW || {};
 			desc: "subsidy 0.6 XMR + fees · tail emission",
 			format: function (v) {
 				return v.toFixed(4) + " XMR";
+			},
+		},
+		txPool: {
+			name: "Tx Pool",
+			desc: "transactions waiting to be mined",
+			format: function (v) {
+				return int(v) + (v === 1 ? " tx" : " txs");
 			},
 		},
 		xmrBtc: {
