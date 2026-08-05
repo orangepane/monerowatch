@@ -30,7 +30,7 @@
 	--bg: #0f0f11;
 	--panel: #16161a;
 	--panel-raised: #1b1b21;
-	--line: #26262d;
+	--line: #2b2622; /* same weight as the old cool #26262d, warmed onto the --edge hue */
 	--text: #f2efe9;
 	--dim: #9b978e;
 	--faint: #6b6862;
