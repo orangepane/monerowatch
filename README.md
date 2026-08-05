@@ -2,6 +2,12 @@
 
 A live Monero network display that runs entirely in the browser. No backend, no trackers, no third-party scripts.
 
+![MoneroWatch on desktop — block height, XMR price, piconero per dollar, and network hashrate](img/screenshots/desktop.png)
+
+<p align="center">
+  <img src="img/screenshots/mobile.png" alt="MoneroWatch on mobile — the same live Monero stats in a single-column layout" width="320">
+</p>
+
 ## What it shows
 
 - Block height, estimated network hashrate, block reward (tail emission), and tx pool size
