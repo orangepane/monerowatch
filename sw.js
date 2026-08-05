@@ -1,0 +1,104 @@
+/* sw.js — offline app shell. Cache-first for same-origin assets;
+   cross-origin (monerod node, price APIs) always goes to the network. */
+"use strict";
+
+var VERSION = "monerowatch-v1";
+
+var ASSETS = [
+	"./",
+	"./index.html",
+	"./manifest.webmanifest",
+	"./css/style.css",
+	"./js/store.js",
+	"./js/widgets.js",
+	"./js/poller.js",
+	"./js/ui.js",
+	"./fonts/red-hat-mono-400.woff2",
+	"./fonts/red-hat-mono-500.woff2",
+	"./fonts/red-hat-mono-600.woff2",
+	"./fonts/red-hat-mono-700.woff2",
+	"./img/monero-symbol-480.png",
+	"./img/icon-16.png",
+	"./img/icon-32.png",
+	"./img/icon-48.png",
+	"./img/icon-64.png",
+	"./img/icon-96.png",
+	"./img/icon-128.png",
+	"./img/icon-192.png",
+	"./img/icon-256.png",
+	"./img/icon-384.png",
+	"./img/icon-512.png",
+	"./img/apple-touch-icon.png",
+	"./img/icon-maskable-192.png",
+	"./img/icon-maskable-512.png",
+];
+
+self.addEventListener("install", function (e) {
+	e.waitUntil(
+		caches
+			.open(VERSION)
+			.then(function (cache) {
+				return cache.addAll(ASSETS);
+			})
+			.then(function () {
+				return self.skipWaiting();
+			})
+	);
+});
+
+self.addEventListener("activate", function (e) {
+	e.waitUntil(
+		caches
+			.keys()
+			.then(function (keys) {
+				return Promise.all(
+					keys
+						.filter(function (k) {
+							return k !== VERSION;
+						})
+						.map(function (k) {
+							return caches.delete(k);
+						})
+				);
+			})
+			.then(function () {
+				return self.clients.claim();
+			})
+	);
+});
+
+self.addEventListener("fetch", function (e) {
+	var url = new URL(e.request.url);
+
+	// never intercept data feeds — they must be live
+	if (url.origin !== self.location.origin) return;
+	if (e.request.method !== "GET") return;
+
+	// navigations: network first, fall back to cached shell when offline
+	if (e.request.mode === "navigate") {
+		e.respondWith(
+			fetch(e.request).catch(function () {
+				return caches.match("./index.html");
+			})
+		);
+		return;
+	}
+
+	// static assets: cache first
+	e.respondWith(
+		caches.match(e.request).then(function (hit) {
+			return (
+				hit ||
+				fetch(e.request).then(function (res) {
+					if (res.ok) {
+						var copy = res.clone();
+						caches.open(VERSION).then(function (cache) {
+							cache.put(e.request, copy);
+						});
+					}
+					return res;
+				})
+			);
+		})
+	);
+});

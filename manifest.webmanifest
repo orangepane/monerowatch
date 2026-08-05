@@ -1,0 +1,19 @@
+{
+	"name": "MoneroWatch",
+	"short_name": "MoneroWatch",
+	"description": "A live Monero network display — no trackers, no third-party scripts.",
+	"id": "./",
+	"start_url": "./",
+	"scope": "./",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#0f0f11",
+	"theme_color": "#ff6600",
+	"categories": ["finance", "utilities"],
+	"icons": [
+		{ "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+		{ "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+		{ "src": "img/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+		{ "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+	]
+}

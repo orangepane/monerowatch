@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, viewport-fit=cover" />
+	<meta name="description" content="MoneroWatch: live Monero block height, price, hashrate, and block reward in your browser. No trackers, no third-party scripts." />
+	<meta name="theme-color" content="#ff6600" />
+	<!-- Privacy: no third-party scripts. Custom node URLs require an open connect-src for https. -->
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' https:; base-uri 'none'; form-action 'none'" />
+	<link rel="icon" href="./img/icon-16.png" sizes="16x16" type="image/png" />
+	<link rel="icon" href="./img/icon-32.png" sizes="32x32" type="image/png" />
+	<link rel="icon" href="./img/icon-48.png" sizes="48x48" type="image/png" />
+	<link rel="icon" href="./img/monero-symbol-480.png" type="image/png" />
+	<link rel="apple-touch-icon" href="./img/apple-touch-icon.png" />
+	<meta name="mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<meta name="apple-mobile-web-app-title" content="MoneroWatch" />
+	<link rel="manifest" href="./manifest.webmanifest" />
+	<link rel="stylesheet" href="./css/style.css" />
+	<title>MoneroWatch</title>
+</head>
+<body>
+	<div id="topbar" role="note" aria-label="monero facts">
+		<span id="marquee" class="marquee"></span>
+	</div>
+
+	<header id="nav">
+		<div class="wordmark">
+			<img class="m-mark" src="./img/monero-symbol-480.png" alt="" width="480" height="480" />
+			<span>monerowatch</span>
+			<span id="net-dot" class="net-dot" role="status" aria-label="network status"></span>
+		</div>
+		<div class="nav-actions">
+			<button id="btn-settings" type="button" class="icon-btn" aria-label="Settings" aria-haspopup="dialog">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+					<path stroke-linecap="round" stroke-linejoin="round"
+						d="M10.34 3.94c.09-.64.63-1.12 1.28-1.12h.76c.65 0 1.19.48 1.28 1.12l.15 1.07c.22.16.43.34.62.54l1.03-.33c.6-.2 1.26.06 1.57.6l.38.66c.31.54.2 1.24-.26 1.66l-.87.8c.01.12.02.24.02.36s-.01.24-.02.36l.87.8c.46.42.57 1.12.26 1.66l-.38.66c-.31.54-.97.79-1.57.6l-1.03-.33a5.6 5.6 0 0 1-.62.54l-.15 1.07c-.09.64-.63 1.12-1.28 1.12h-.76c-.65 0-1.19-.48-1.28-1.12l-.15-1.07a5.6 5.6 0 0 1-.62-.54l-1.03.33c-.6.2-1.26-.06-1.57-.6l-.38-.66a1.36 1.36 0 0 1 .26-1.66l.87-.8a5.6 5.6 0 0 1-.02-.36c0-.12.01-.24.02-.36l-.87-.8a1.36 1.36 0 0 1-.26-1.66l.38-.66c.31-.54.97-.79 1.57-.6l1.03.33c.19-.2.4-.38.62-.54l.15-1.07z" />
+					<circle cx="12" cy="12" r="1.9" />
+				</svg>
+			</button>
+			<button id="btn-add" type="button" class="icon-btn" aria-label="Add a display">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+				</svg>
+			</button>
+		</div>
+	</header>
+
+	<main id="grid" aria-live="off"></main>
+
+	<footer id="footer">
+		<span class="foot-left">zero trackers · zero third-party scripts</span>
+		<span id="foot-status" class="foot-status">connecting…</span>
+		<span class="foot-right">your node · your rules</span>
+	</footer>
+
+	<script src="./js/store.js"></script>
+	<script src="./js/widgets.js"></script>
+	<script src="./js/poller.js"></script>
+	<script src="./js/ui.js"></script>
+</body>
+</html>
