@@ -8,6 +8,8 @@ A live Monero network display that runs entirely in the browser. No backend, no 
   <img src="img/screenshots/mobile.png" alt="MoneroWatch on mobile — the same live Monero stats in a single-column layout" width="320">
 </p>
 
+**[Open MoneroWatch →](https://orangepane.github.io/monerowatch/)** — or clone it and run it yourself (see [Run](#run)).
+
 ## What it shows
 
 - Block height, estimated network hashrate, block reward (tail emission), and tx pool size
@@ -45,7 +47,10 @@ monerod --rpc-bind-ip 0.0.0.0 --confirm-external-bind \
 
 Then set the node URL in settings, e.g. `http://192.168.1.10:18081`.
 
-Two browser rules to know: a plain-`http` node only works when this page is itself served over `http` (mixed-content blocking), and the origin in `--rpc-access-control-origins` must match exactly — scheme, host, and port.
+Two browser rules to know:
+
+- **A plain-`http` node needs a plain-`http` page.** Browsers block `http` requests from an `https` page (mixed content), so a node at `http://192.168.1.10:18081` or `http://127.0.0.1:18081` **will not work on the hosted version** — the request fails silently and the widgets just stop updating. Run MoneroWatch locally for that, or give your node a TLS certificate and use an `https` URL. The default public node is `https`, so the hosted version works out of the box.
+- **The origin must match exactly** in `--rpc-access-control-origins` — scheme, host, and port. Use `https://orangepane.github.io` for the hosted version, `http://localhost:8000` for a local one.
 
 ## A note on the tx pool
 
