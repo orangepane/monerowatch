@@ -474,6 +474,19 @@ window.MW = window.MW || {};
 		return url.origin + url.pathname.replace(/\/+$/, "");
 	}
 
+	// An https page cannot reach an http node — the browser blocks it as mixed
+	// content and the fetch fails silently. Catch it here rather than let the
+	// widgets quietly stop updating.
+	function isMixedContent(url) {
+		return location.protocol === "https:" && url.indexOf("http://") === 0;
+	}
+
+	function exampleNodeUrl() {
+		return location.protocol === "https:"
+			? "https://xmr-node.cakewallet.com:18081"
+			: "http://127.0.0.1:18081";
+	}
+
 	function openSettings() {
 		closeSettings();
 		closePicker();
@@ -517,7 +530,13 @@ window.MW = window.MW || {};
 		save.addEventListener("click", function () {
 			var url = normalizeNodeUrl(input.value.trim());
 			if (!url) {
-				err.textContent = "needs a full http:// or https:// url, e.g. http://127.0.0.1:18081";
+				err.textContent = "needs a full http:// or https:// url, e.g. " + exampleNodeUrl();
+				input.focus();
+				return;
+			}
+			if (isMixedContent(url)) {
+				err.textContent =
+					"this page is https, so the browser blocks http nodes. use an https node, or run MoneroWatch locally to reach this one.";
 				input.focus();
 				return;
 			}
