@@ -57,3 +57,7 @@ Two browser rules to know:
 Monero's transaction pool is public — that is what the tx pool widget reads. What Monero hides is amounts, senders, and receivers, not the existence of pending transactions.
 
 The Monero symbol is from the getmonero.org press kit. Fonts are Red Hat Mono (SIL OFL 1.1).
+
+## Sister project
+
+Prefer Bitcoin? [btc-ticker](https://orangepane.github.io/btc-ticker/) is the same idea, simpler: a live BTC price in 6 currencies on one static page. Same rules: no backend, no trackers, nothing but the numbers.
