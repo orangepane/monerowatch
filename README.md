@@ -58,6 +58,7 @@ Monero's transaction pool is public — that is what the tx pool widget reads. W
 
 The Monero symbol is from the getmonero.org press kit. Fonts are Red Hat Mono (SIL OFL 1.1).
 
-## Sister project
+## Sister projects
 
-Prefer Bitcoin? [btc-ticker](https://orangepane.github.io/btc-ticker/) is the same idea, simpler: a live BTC price in 6 currencies on one static page. Same rules: no backend, no trackers, nothing but the numbers.
+- [BitcoinWatch](https://orangepane.github.io/bitcoinwatch/): the same display for bitcoin. Block height, price, sats per dollar, mempool, hashrate, halving countdown.
+- [btc-ticker](https://orangepane.github.io/btc-ticker/): the same idea, simpler: a live BTC price in 6 currencies on one static page. Same rules: no backend, no trackers, nothing but the numbers.
