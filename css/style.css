@@ -117,11 +117,6 @@ button {
 	opacity: 0;
 }
 
-.marquee b {
-	color: var(--accent-soft);
-	font-weight: 500;
-}
-
 /* ---- nav ---- */
 
 #nav {

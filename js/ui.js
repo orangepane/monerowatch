@@ -3,6 +3,11 @@ window.MW = window.MW || {};
 (function (MW) {
 	"use strict";
 
+	// One line, `white-space: nowrap`, so width is a hard budget: the face is
+	// monospace (every glyph 600/1000 em), 11px + 0.18em tracking = 8.58px a
+	// character. #topbar is the full viewport, so at the 360px phone width
+	// (360 - 32 padding) / 8.58 = 38 characters fit before the ellipsis.
+	// Entries 1, 3, 6 and 7 predate this budget and still clip at 360px.
 	var FACTS = [
 		"ring size 16 · your signature hides among 15 decoys",
 		"target block time · 120 seconds",
@@ -14,10 +19,26 @@ window.MW = window.MW || {};
 		"zero third-party scripts on this page",
 		"your node · your rules",
 		"private digital cash",
+		"monero is esperanto for coin",
+		"forked away from an 80% premine",
+		"no premine · no ico · no dev tax",
+		"no ceo · no foundation · no roadmap",
+		"the whitepaper author is a pseudonym",
+		"no chain analysis industry here",
+		"a clean coin is not a thing",
+		"every xmr is the same xmr",
+		"share a view key · not your coins",
+		"the mempool does not know your name",
+		"your node is the explorer",
+		"no wallet here · nothing to steal",
 	];
 
 	var PULSE_MS = 30000; // multi-mode rotation cadence: settle, change, settle
-	var MARQUEE_MS = 8000;
+	// a phrase holds for two minutes — one per block, roughly. this page gets
+	// pinned as an ambient ticker on block height, and a line that changes every
+	// 30s is the only thing in the room still moving: it pulls the eye for no
+	// information. long dwell, and no rotation at all while the tab is hidden.
+	var MARQUEE_MS = 120000;
 	var STALE_MS = 5000; // staleness must tick on its own — dead feeds send nothing
 
 	var grid = document.getElementById("grid");
@@ -445,13 +466,47 @@ window.MW = window.MW || {};
 	/* ---------- marquee facts ---------- */
 
 	var factIdx = 0;
+
+	// random order per load — same set every visit, never the same queue, so a
+	// reload doesn't drop you back at the top of a fixed rotation. called again
+	// on every wrap, hence avoidFirst: a new queue must not open on the line the
+	// previous one just closed on.
+	function shuffleFacts(avoidFirst) {
+		for (var i = FACTS.length - 1; i > 0; i--) {
+			var j = Math.floor(Math.random() * (i + 1));
+			var tmp = FACTS[i];
+			FACTS[i] = FACTS[j];
+			FACTS[j] = tmp;
+		}
+
+		if (avoidFirst !== undefined && FACTS.length > 1 && FACTS[0] === avoidFirst) {
+			var k = 1 + Math.floor(Math.random() * (FACTS.length - 1));
+			FACTS[0] = FACTS[k];
+			FACTS[k] = avoidFirst;
+		}
+	}
+
 	function rotateFact() {
 		marquee.classList.add("faded");
 		setTimeout(function () {
 			factIdx = (factIdx + 1) % FACTS.length;
+			// wrapped: reshuffle so the cycle never repeats its own order
+			if (factIdx === 0) shuffleFacts(FACTS[FACTS.length - 1]);
 			marquee.textContent = FACTS[factIdx];
 			marquee.classList.remove("faded");
 		}, 400);
+	}
+
+	var marqueeTimer = null;
+	function startMarquee() {
+		// guards a fade left half-finished by a throttled background timeout
+		marquee.classList.remove("faded");
+		if (marqueeTimer === null) marqueeTimer = setInterval(rotateFact, MARQUEE_MS);
+	}
+
+	function stopMarquee() {
+		clearInterval(marqueeTimer);
+		marqueeTimer = null;
 	}
 
 	/* ---------- settings popover ---------- */
@@ -587,8 +642,13 @@ window.MW = window.MW || {};
 
 	// pause when tab hidden — no point polling a screen nobody is watching
 	document.addEventListener("visibilitychange", function () {
-		if (document.hidden) MW.poller.stop();
-		else MW.poller.start();
+		if (document.hidden) {
+			MW.poller.stop();
+			stopMarquee();
+		} else {
+			MW.poller.start();
+			startMarquee();
+		}
 	});
 
 	// installable PWA: register the offline shell (needs http(s), not file://)
@@ -596,8 +656,9 @@ window.MW = window.MW || {};
 		navigator.serviceWorker.register("./sw.js").catch(function () {});
 	}
 
+	shuffleFacts();
 	marquee.textContent = FACTS[0];
-	setInterval(rotateFact, MARQUEE_MS);
+	startMarquee();
 	setInterval(renderStaleness, STALE_MS);
 	setInterval(function () {
 		MW.store.tickPulse();

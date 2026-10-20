@@ -2,7 +2,7 @@
    cross-origin (monerod node, price APIs) always goes to the network. */
 "use strict";
 
-var VERSION = "monerowatch-v2";
+var VERSION = "monerowatch-v4";
 
 var ASSETS = [
 	"./",
